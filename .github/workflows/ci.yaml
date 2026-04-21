@@ -117,6 +117,11 @@ jobs:
             liblzma-dev liblz4-dev libbz2-dev zlib1g-dev \
             clang lld libc++-dev libc++abi-dev
 
+      - name: Prepare (Rust)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.81.0
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Prepare (source)
         uses: actions/download-artifact@v4
         with:
@@ -170,6 +175,9 @@ jobs:
     steps:
       - name: Prepare (cross-compilation toolchain and arm64 libraries)
         run: |
+          # Restrict default Ubuntu sources to amd64 only (they don't have arm64)
+          sudo sed -i '/^URIs:/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+
           # Add ARM64 architecture
           sudo dpkg --add-architecture arm64
 
@@ -197,7 +205,7 @@ jobs:
 
       - name: Prepare (Rust)
         run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.81.0
           . "$HOME/.cargo/env"
           rustup target add ${{ env.rust_target }}
 
@@ -276,9 +284,14 @@ jobs:
       - name: Prepare
         run: |
           brew update
-          brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm rust || true
-          brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm rust
+          brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm || true
+          brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm
           echo "$(brew --prefix)/opt/llvm/bin" | tee -a $GITHUB_PATH
+
+      - name: Prepare (Rust)
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.81.0
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Prepare (source)
         uses: actions/download-artifact@v4
@@ -342,7 +355,13 @@ jobs:
             base-devel file wget vim
           pacboy: >-
             xz:p lz4:p bzip2:p zlib:p pkgconf:p clang:p
-            lld:p cmake:p libc++:p ninja:p rust:p
+            lld:p cmake:p libc++:p ninja:p
+
+      - name: Prepare (Rust)
+        shell: msys2 {0}
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain 1.81.0
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Prepare (source)
         uses: actions/download-artifact@v4
