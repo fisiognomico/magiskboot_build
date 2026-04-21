@@ -105,10 +105,8 @@ jobs:
   # ── Linux x86_64 ────────────────────────────────────────────────────
   build-linux-x86_64:
     name: Build (Linux x86_64)
-    runs-on: ubuntu-22.04
-    permissions:
-      actions: write
-    needs: [vars]
+    runs-on: ubuntu-24.04
+    needs: [vars, src]
 
     steps:
       - name: Prepare
@@ -118,11 +116,6 @@ jobs:
             build-essential pkg-config cmake ninja-build \
             liblzma-dev liblz4-dev libbz2-dev zlib1g-dev \
             clang lld libc++-dev libc++abi-dev
-
-      - name: Synchronize (source)
-        uses: yogeshlonkar/wait-for-jobs@v0.2.1
-        with:
-          jobs: 'Prepare (source)'
 
       - name: Prepare (source)
         uses: actions/download-artifact@v4
@@ -165,17 +158,11 @@ jobs:
           name: magiskboot-linux-x86_64
           path: ${{ github.workspace }}/${{ env.progname }}-out/magiskboot-linux-x86_64.zip
 
-      - name: Cancel other jobs
-        if: failure()
-        uses: andymckay/cancel-action@0.4
-
-  # ── Linux aarch64 (cross-compile on Ubuntu 22.04) ───────────────────
+  # ── Linux aarch64 (cross-compile on Ubuntu 24.04) ───────────────────
   build-linux-aarch64:
     name: Build (Linux aarch64)
-    runs-on: ubuntu-22.04
-    permissions:
-      actions: write
-    needs: [vars]
+    runs-on: ubuntu-24.04
+    needs: [vars, src]
 
     env:
       rust_target: "aarch64-unknown-linux-gnu"
@@ -190,7 +177,7 @@ jobs:
           SOURCES_FILE=/etc/apt/sources.list.d/arm64-cross.sources
           echo 'Types: deb' | sudo tee "$SOURCES_FILE" > /dev/null
           echo 'URIs: http://ports.ubuntu.com/ubuntu-ports' | sudo tee -a "$SOURCES_FILE" > /dev/null
-          echo 'Suites: jammy jammy-updates' | sudo tee -a "$SOURCES_FILE" > /dev/null
+          echo 'Suites: noble noble-updates' | sudo tee -a "$SOURCES_FILE" > /dev/null
           echo 'Components: main restricted universe' | sudo tee -a "$SOURCES_FILE" > /dev/null
           echo 'Architectures: arm64' | sudo tee -a "$SOURCES_FILE" > /dev/null
           echo 'Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg' | sudo tee -a "$SOURCES_FILE" > /dev/null
@@ -213,11 +200,6 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y
           . "$HOME/.cargo/env"
           rustup target add ${{ env.rust_target }}
-
-      - name: Synchronize (source)
-        uses: yogeshlonkar/wait-for-jobs@v0.2.1
-        with:
-          jobs: 'Prepare (source)'
 
       - name: Prepare (source)
         uses: actions/download-artifact@v4
@@ -282,17 +264,11 @@ jobs:
           name: magiskboot-linux-aarch64
           path: ${{ github.workspace }}/${{ env.progname }}-out/magiskboot-linux-aarch64.zip
 
-      - name: Cancel other jobs
-        if: failure()
-        uses: andymckay/cancel-action@0.4
-
   # ── macOS arm64 (native on macos-14) ────────────────────────────────
   build-macos-arm64:
     name: Build (macOS arm64)
     runs-on: macos-14
-    permissions:
-      actions: write
-    needs: [vars]
+    needs: [vars, src]
     env:
       HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
 
@@ -303,11 +279,6 @@ jobs:
           brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm rust || true
           brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm rust
           echo "$(brew --prefix)/opt/llvm/bin" | tee -a $GITHUB_PATH
-
-      - name: Synchronize (source)
-        uses: yogeshlonkar/wait-for-jobs@v0.2.1
-        with:
-          jobs: 'Prepare (source)'
 
       - name: Prepare (source)
         uses: actions/download-artifact@v4
@@ -352,87 +323,11 @@ jobs:
           name: magiskboot-macos-arm64
           path: ${{ github.workspace }}/${{ env.progname }}-out/magiskboot-macos-arm64.zip
 
-      - name: Cancel other jobs
-        if: failure()
-        uses: andymckay/cancel-action@0.4
-
-  # ── macOS x86_64 (native on macos-13) ───────────────────────────────
-  build-macos-x86_64:
-    name: Build (macOS x86_64)
-    runs-on: macos-13
-    permissions:
-      actions: write
-    needs: [vars]
-    env:
-      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
-
-    steps:
-      - name: Prepare
-        run: |
-          brew update
-          brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm rust || true
-          brew install --overwrite coreutils wget file xz lz4 pkg-config cmake ninja llvm rust
-          echo "$(brew --prefix)/opt/llvm/bin" | tee -a $GITHUB_PATH
-
-      - name: Synchronize (source)
-        uses: yogeshlonkar/wait-for-jobs@v0.2.1
-        with:
-          jobs: 'Prepare (source)'
-
-      - name: Prepare (source)
-        uses: actions/download-artifact@v4
-        with:
-          name: srcpkg
-
-      - name: Build
-        run: |
-          tar -xf magiskboot_*-src.tar.xz
-          cd magiskboot_*-src/
-
-          CC=clang CXX=clang++ cmake -G Ninja -B build \
-            -DCMAKE_AR=llvm-ar -DCMAKE_RANLIB=llvm-ranlib \
-            -DCMAKE_BUILD_TYPE=${{ needs.vars.outputs.cmake_build_type }} \
-            -DPREFER_STATIC_LINKING=ON
-
-          cmake --build build -j "$(nproc)" -v
-          strip build/magiskboot
-
-          file build/magiskboot
-          otool -L build/magiskboot
-          ./build/magiskboot || true
-
-          rm -rf "$GITHUB_WORKSPACE/${{ env.progname }}-out"
-          mkdir -p "$GITHUB_WORKSPACE/${{ env.progname }}-out"
-          cp -av build/magiskboot "$GITHUB_WORKSPACE/${{ env.progname }}-out/"
-
-      - name: Check
-        run: |
-          cd magiskboot_*-src/
-          ./scripts/magiskboot_test.sh "$GITHUB_WORKSPACE/${{ env.progname }}-out/magiskboot"
-
-      - name: Package
-        run: |
-          cd "${{ env.progname }}-out"
-          zip "magiskboot-macos-x86_64.zip" magiskboot
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          if-no-files-found: error
-          name: magiskboot-macos-x86_64
-          path: ${{ github.workspace }}/${{ env.progname }}-out/magiskboot-macos-x86_64.zip
-
-      - name: Cancel other jobs
-        if: failure()
-        uses: andymckay/cancel-action@0.4
-
   # ── Windows x86_64 ─────────────────────────────────────────────────
   build-windows-x86_64:
     name: Build (Windows x86_64)
     runs-on: windows-latest
-    permissions:
-      actions: write
-    needs: [vars]
+    needs: [vars, src]
     env:
       MSYS: "winsymlinks:native"
       msystem: CLANG64
@@ -448,11 +343,6 @@ jobs:
           pacboy: >-
             xz:p lz4:p bzip2:p zlib:p pkgconf:p clang:p
             lld:p cmake:p libc++:p ninja:p rust:p
-
-      - name: Synchronize (source)
-        uses: yogeshlonkar/wait-for-jobs@v0.2.1
-        with:
-          jobs: 'Prepare (source)'
 
       - name: Prepare (source)
         uses: actions/download-artifact@v4
@@ -498,7 +388,3 @@ jobs:
           if-no-files-found: error
           name: magiskboot-windows-x86_64
           path: ${{ github.workspace }}/${{ env.progname }}-out/magiskboot-windows-x86_64.zip
-
-      - name: Cancel other jobs
-        if: failure()
-        uses: andymckay/cancel-action@0.4
